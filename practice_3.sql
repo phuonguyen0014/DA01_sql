@@ -21,9 +21,8 @@ SELECT EXTRACT(month FROM submit_date) AS month,
 product_id AS product,
 AVG(stars) AS avg_stars
 FROM reviews
-GROUP BY product_id;
--- got error: "column "reviews.submit_date" must appear in the GROUP BY clause or be used in an aggregate function"
--- em không hiểu tại sao phải GROUP BY cả "EXTRACT(month FROM submit_date)"
+GROUP BY product_id, EXTRACT(month FROM submit_date);
+
 
 --baitap5
 SELECT sender_id, COUNT(sender_id) AS message_count
@@ -40,12 +39,11 @@ from Tweets
 where length(content) > 15;
 
 --baitap7
-select distinct activity_date AS day, count(user_id) AS active_users
+select activity_date AS day, count(distinct user_id) AS active_users
 from Activity
 where activity_date BETWEEN '2019-06-28' AND '2019-07-27'
 group by activity_date;
--- em muốn hỏi ở bài 7 này, ngoài cách sử dụng BETWEEN AND ra, em có thể sử dụng 'mathematic operators' để làm được ko
--- ngoài ra, em chạy thử thì kết quả vẫn ko đúng, em bị sai ở chỗ nào ạ 
+
 
 --baitap8
 select count(id) as numEmployee
