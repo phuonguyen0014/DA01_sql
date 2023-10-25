@@ -37,6 +37,7 @@ INNER JOIN age_breakdown b
 ON a.user_id = b.user_id
 GROUP BY b.age_bucket;
 --column "a.activity_type" must appear in the GROUP BY clause or be used in an aggregate function (LINE: 3)
+-- tai sao em phai dung GROUP BY o cau nay?
 
 --baitap4
 SELECT c.customer_id
@@ -69,3 +70,88 @@ LEFT JOIN page_likes l
 on p.page_id = l.page_id
 where l.page_id is NULL
 ORDER BY p.page_id ASC;
+
+
+--Mid test--
+--baitap1
+select distinct Min(replacement_cost) as chi_phi_thap 
+from film;
+
+--baitap2
+SELECT COUNT(CASE WHEN replacement_cost >= 9.99 AND replacement_cost <= 19.99 THEN 1 ELSE NULL END) AS low
+FROM film;
+-- khi em thử GROUP BY film_id hay replacement_cost, nó ko trả ra kết quả đúng
+/*select COUNT(CASE
+	 WHEN replacement_cost >= 9.99 AND replacement_cost <= 19.99 THEN 1 ELSE 0 END) as low
+from film
+GROUP BY film_id;*/
+-- ngoài ra em muốn hỏi ở phần điều kiện else, lúc đầu em cho ELSE là 0, k.quả = 1000
+-- nhưng khi em cho ELSE là NULL, k.quả = 514
+-- em muốn hỏi tại sao lại ra 2 kết quả khác nhau ở đây ạ
+
+-baitap3
+select f.title, MAX(f.length), c.name
+from film f
+join film_category fc
+on f.film_id = fc.film_id
+join category c
+on c.category_id = fc.category_id
+where c.name = 'Drama' or c.name = 'Sports'
+group by f.title, c.name, f.length
+order by f.length DESC
+LIMIT 1;
+
+--baitap4
+select COUNT(c.name) AS popular, c.name
+from film f
+join film_category fc
+on f.film_id = fc.film_id
+join category c
+on c.category_id = fc.category_id
+group by c.name;
+
+--baitap5
+select a.actor_id, a.first_name, a.last_name, COUNT(f.film_id) as so_luong_phim
+from actor a
+join film_actor fa
+on a.actor_id = fa.actor_id
+join film f
+on f.film_id = fa.film_id
+group by a.actor_id
+order by so_luong_phim DESC
+LIMIT 1;
+
+--baitap6
+select COUNT(a.address_id) AS null_addresses
+from address a
+left join customer c
+on a.address_id = c.address_id
+where c.customer_id IS NULL;
+
+--baitap7
+select SUM(p.amount) as total, ci.city
+from payment p
+join customer c
+on p.customer_id = c.customer_id
+join address a
+on c.address_id = a.address_id
+join city ci
+on ci.city_id = a.city_id
+group by ci.city
+order by total DESC
+LIMIT 1;
+
+--baitap8
+select ci.city, co.country, SUM(p.amount) as doanh_thu
+from payment p
+join customer c
+on p.customer_id = c.customer_id
+join address a
+on c.address_id = a.address_id
+join city ci
+on ci.city_id = a.city_id
+join country co
+on co.country_id = ci.country_id
+group by ci.city, co.country
+order by doanh_thu DESC;
+
