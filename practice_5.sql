@@ -101,6 +101,8 @@ from film;
 --baitap2
 SELECT COUNT(CASE WHEN replacement_cost >= 9.99 AND replacement_cost <= 19.99 THEN 1 ELSE NULL END) AS low
 FROM film;
+SELECT SUM(CASE WHEN replacement_cost >= 9.99 AND replacement_cost <= 19.99 THEN 1 ELSE 0 END) AS low
+FROM film;
 -- khi em thử GROUP BY film_id hay replacement_cost, nó ko trả ra kết quả đúng
 /*select COUNT(CASE
 	 WHEN replacement_cost >= 9.99 AND replacement_cost <= 19.99 THEN 1 ELSE 0 END) as low
@@ -109,6 +111,15 @@ GROUP BY film_id;*/
 -- ngoài ra em muốn hỏi ở phần điều kiện else, lúc đầu em cho ELSE là 0, k.quả = 1000
 -- nhưng khi em cho ELSE là NULL, k.quả = 514
 -- em muốn hỏi tại sao lại ra 2 kết quả khác nhau ở đây ạ
+SELECT 
+CASE WHEN replacement_cost < 20 THEN 'low'
+WHEN replacement_cost BETWEEN 20 AND 25 THEN 'medium'
+ELSE 'high'
+END category,
+COUNT(*) as so_luong
+FROM film
+GROUP BY category;
+
 
 -baitap3
 select f.title, MAX(f.length), c.name
