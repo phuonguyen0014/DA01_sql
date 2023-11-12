@@ -152,11 +152,11 @@ WITH dataset_table AS (
         (SUM(oi.sale_price) - SUM(p.cost)) / NULLIF(SUM(p.cost), 0) * 100 AS Profit_to_cost_ratio
         
     FROM 
-        orders o
+        bigquery-public-data.thelook_ecommerce.orders o
     JOIN 
-        order_items oi ON o.id = oi.order_id
+        bigquery-public-data.thelook_ecommerce.order_items oi ON o.id = oi.order_id
     JOIN 
-        products p ON p.id = oi.product_id
+        bigquery-public-data.thelook_ecommerce.products p ON p.id = oi.product_id
     GROUP BY 
         TO_CHAR(o.created_at, 'yyyy-mm'), EXTRACT(YEAR FROM o.created_at), p.category
 )
@@ -191,7 +191,7 @@ WITH FirstPurchase AS (
             MIN(created_at) OVER (PARTITION BY user_id) AS first_purchase_date,
             created_at
         FROM 
-            orders_item 
+            bigquery-public-data.thelook_ecommerce.order_items 
     ) a
 ),
 CohortCounts AS (
