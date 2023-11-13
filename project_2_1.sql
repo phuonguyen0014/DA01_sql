@@ -1,23 +1,37 @@
 --1. Thống kê tổng số lượng người mua và số lượng đơn hàng đã hoàn thành mỗi tháng
-SELECT
-    COUNT(DISTINCT o.order_id) AS total_order,
-    COUNT(DISTINCT u.id) AS total_user,
-    TO_CHAR(o.created_at, 'yyyy-mm') AS month_year
-FROM
-    bigquery-public-data.thelook_ecommerce.orders o
-JOIN
-    bigquery-public-data.thelook_ecommerce.users u ON o.user_id = u.id
-WHERE
-    o.status = 'Complete'
-    AND o.created_at BETWEEN '2019-01-01' AND '2022-04-01'
-GROUP BY
-    month_year
-ORDER BY
-    month_year ASC;
+WITH MonthlyData AS (
+    SELECT       
+        FORMAT_DATE('%Y-%m', DATE (created_at)) as month_year,
+        COUNT(DISTINCT order_id) AS total_order,
+        COUNT(DISTINCT user_id) AS total_user
+    FROM
+        bigquery-public-data.thelook_ecommerce.orders
+    WHERE
+        status = 'Complete'
+        AND created_at BETWEEN '2019-01-01' AND '2022-04-30'
+    GROUP BY
+        month_year
+    ORDER BY
+        month_year ASC
+),
+Trends AS (
+    SELECT
+        month_year,
+        total_order,
+        total_user,
+        LAG(month_year) OVER (ORDER BY month_year) AS previous_month,
+        LAG(total_order) OVER (ORDER BY month_year) AS previous_order,
+        LAG(total_user) OVER (ORDER BY month_year) AS previous_user, 
+        total_order - LAG(total_order) OVER (ORDER BY month_year) as diff_order,
+        total_user - LAG(total_user) OVER (ORDER BY month_year) as diff_user                 
+    FROM
+        MonthlyData
+)
+SELECT * FROM Trends ORDER BY month_year;
 
 --2. Thống kê giá trị đơn hàng trung bình và tổng số người dùng khác nhau mỗi tháng 
 SELECT
-    TO_CHAR(o.created_at, 'YYYY-MM') AS month_year,
+    FORMAT_DATE('%Y-%m', DATE (o.created_at)) as month_year,
     COUNT(DISTINCT o.user_id) AS distinct_users,
     SUM(oi.sale_price) / COUNT(DISTINCT o.order_id) AS average_order_value
 FROM
@@ -32,59 +46,67 @@ GROUP BY
 ORDER BY
     month_year ASC;
 
+-- bài này em chạy nó ra kết quả "There is no data to display.", chị có thể xem giúp em bị sai ở đâu ko ạ?
+
 --3. Nhóm khách hàng theo độ tuổi
-WITH youngest AS (
+WITH MinMaxAge AS (
     SELECT
-        id, first_name, last_name, gender, MIN(age) AS min_age, 'youngest' AS tag
+        gender,
+        MIN(age) AS youngest_age,
+        MAX(age) AS oldest_age
     FROM
         bigquery-public-data.thelook_ecommerce.users
     WHERE
         created_at BETWEEN '2019-01-01' AND '2022-04-30'
     GROUP BY
         gender
-),
-oldest AS (
+)
+,
+Youngest AS (
     SELECT
-        id, first_name, last_name, gender, MAX(age) AS max_age, 'oldest' AS tag
+        u.first_name,
+        u.last_name,
+        u.gender,
+        u.age,
+        'youngest' AS tag
     FROM
-        bigquery-public-data.thelook_ecommerce.users
-    WHERE
-        created_at BETWEEN '2019-01-01' AND '2022-04-30'
-    GROUP BY
-        gender
+        bigquery-public-data.thelook_ecommerce.users u
+    JOIN
+        MinMaxAge ae ON u.gender = ae.gender AND u.age = ae.youngest_age
 ),
-combined AS (  
-SELECT
-    u.first_name, u.last_name, u.gender, u.age, y.tag
-FROM
-    bigquery-public-data.thelook_ecommerce.users u
-JOIN
-    youngest y ON u.id = y.id AND u.age = y.min_age
+Oldest AS (
+    SELECT
+        u.first_name,
+        u.last_name,
+        u.gender,
+        u.age,
+        'oldest' AS tag
+    FROM
+        bigquery-public-data.thelook_ecommerce.users u
+    JOIN
+        MinMaxAge ae ON u.gender = ae.gender AND u.age = ae.oldest_age
+)
+,
+Combined AS (  
+SELECT * FROM Youngest
 UNION ALL
-SELECT
-    u.first_name, u.last_name, u.gender, u.age, o.tag
-FROM
-    bigquery-public-data.thelook_ecommerce.users u
-JOIN
-    oldest o ON u.id = o.id AND u.age = o.max_age
-ORDER BY
-    gender, tag DESC;)
+SELECT * FROM Oldest
+ORDER BY gender, tag DESC)
 
 -- insight
 SELECT
     tag,
-    gender,
-    COUNT(*) AS count,
-    AVG(age) AS average_age
+    age,
+    COUNT(*) AS count,    
 FROM
     Combined
 GROUP BY
-    tag, gender;
+    tag, age;
 
 --4. Thống kê top 5 sản phẩm có lợi nhuận cao nhất từng tháng (xếp hạng cho từng sản phẩm). 
 WITH monthly_sales AS (
     SELECT
-        TO_CHAR(oi.created_at, 'YYYY-MM') AS month_year,
+        FORMAT_DATE('%Y-%m', DATE (created_at)) AS month_year,
         p.id AS product_id,
         p.name AS product_name,
         SUM(oi.sale_price) AS sales,
@@ -102,8 +124,7 @@ SELECT
     DENSE_RANK() OVER (PARTITION BY month_year ORDER BY profit DESC) AS rank_per_month
 FROM
     monthly_sales
-WHERE
-    rank_per_month <= 5;
+LIMIT 5;
 
 --5. Thống kê tổng doanh thu theo ngày của từng danh mục sản phẩm (category) trong 3 tháng qua ( giả sử ngày hiện tại là 15/4/2022)
 SELECT
@@ -115,8 +136,7 @@ FROM
 JOIN
     bigquery-public-data.thelook_ecommerce.products p ON oi.product_id = p.id
 WHERE
-    oi.created_at >= '2022-01-15'
-    AND oi.created_at <= '2022-04-15'
+    oi.created_at BETWEEN '2022-01-15' AND '2022-04-15'
 GROUP BY
     dates, product_categories
 ORDER BY
@@ -128,23 +148,23 @@ ORDER BY
 -- 1
 WITH dataset_table AS (
     SELECT 
-        TO_CHAR(o.created_at, 'yyyy-mm') AS Month,
+        FORMAT_DATE('%Y-%m', DATE (o.created_at)) AS Month,
         EXTRACT(YEAR FROM o.created_at) AS Year,
         p.category AS Product_category,
         SUM(oi.sale_price) AS TPV,
-        COUNT(DISTINCT o.id) AS TPO,
+        COUNT(DISTINCT o.order_id) AS TPO,
         
         -- Previous month's revenue
-        LAG(SUM(oi.sale_price), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm')) AS previous_month_re,
+        LAG(SUM(oi.sale_price)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at))) AS previous_month_re,
         -- Revenue growth
-        (SUM(oi.sale_price) - LAG(SUM(oi.sale_price), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm'))) 
-        / NULLIF(LAG(SUM(oi.sale_price), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm')), 0) * 100 AS Revenue_growth,
+        (SUM(oi.sale_price) - LAG(SUM(oi.sale_price)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at)))) 
+        / LAG(SUM(oi.sale_price)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at))) * 100 AS Revenue_growth,
         
         -- Previous month's order count
-        LAG(COUNT(DISTINCT o.id), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm')) AS previous_month_order,
+        LAG(COUNT(DISTINCT o.order_id)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at))) AS previous_month_order,
         -- Order growth
-        (COUNT(DISTINCT o.id) - LAG(COUNT(DISTINCT o.id), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm')))
-        / NULLIF(LAG(COUNT(DISTINCT o.id), 1) OVER (PARTITION BY p.category ORDER BY TO_CHAR(o.created_at, 'yyyy-mm')), 0) * 100 AS Order_growth,
+        (COUNT(DISTINCT o.order_id) - LAG(COUNT(DISTINCT o.order_id)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at))))
+        / LAG(COUNT(DISTINCT o.order_id)) OVER (PARTITION BY p.category ORDER BY FORMAT_DATE('%Y-%m', DATE (o.created_at))) * 100 AS Order_growth,
         
         -- Total cost and profit calculations
         SUM(p.cost) AS Total_cost,
@@ -154,14 +174,12 @@ WITH dataset_table AS (
     FROM 
         bigquery-public-data.thelook_ecommerce.orders o
     JOIN 
-        bigquery-public-data.thelook_ecommerce.order_items oi ON o.id = oi.order_id
+        bigquery-public-data.thelook_ecommerce.order_items oi ON o.order_id = oi.order_id
     JOIN 
         bigquery-public-data.thelook_ecommerce.products p ON p.id = oi.product_id
     GROUP BY 
-        TO_CHAR(o.created_at, 'yyyy-mm'), EXTRACT(YEAR FROM o.created_at), p.category
-)
+        1, 2, 3)
 
--- Create the view
 CREATE VIEW vw_ecommerce_analyst AS
 SELECT 
     Month, 
@@ -176,6 +194,8 @@ SELECT
     Profit_to_cost_ratio
 FROM 
     dataset_table;
+
+-- Em bị lỗi "Window ORDER BY expression references o.created_at which is neither grouped nor aggregated at" ở dòng 158, em ko hiểu sao bị lỗi trong khi em đã Group nó rồi
 
 -- 2. Tạo retention cohort analysis.
 WITH FirstPurchase AS (
